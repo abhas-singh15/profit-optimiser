@@ -2,10 +2,12 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.caption("*Demo prototype — simulated demand based on marketplace behavior")
-
+# --------------------------
+# Page Config
+# --------------------------
 st.set_page_config(page_title="Pricing Optimizer", layout="wide")
 
+st.caption("Prototype: Pricing optimization under demand uncertainty (simulated marketplace data)")
 st.title("Amazon Pricing Optimizer (Profit-Based)")
 
 # --------------------------
@@ -27,7 +29,6 @@ if sku == "Sashaa Decor (Validation Case)":
     demand_at_current = 500
     b_default = 3
     comp_min, comp_max = 420, 650
-
 else:
     cost = 350
     current_price = 989
@@ -45,7 +46,7 @@ current_price = st.sidebar.number_input("Current Price (₹)", value=current_pri
 demand_at_current = st.sidebar.number_input("Demand at Current Price", value=demand_at_current)
 
 b = st.sidebar.slider(
-    "Demand Sensitivity(Price Impact) (b)",
+    "Demand Sensitivity (Price Impact)",
     min_value=0.1,
     max_value=10.0,
     value=float(b_default),
@@ -58,7 +59,6 @@ comp_max = st.sidebar.number_input("Competitor Max Price", value=comp_max)
 # --------------------------
 # Model Construction
 # --------------------------
-# D(p) = a - b*p
 a = demand_at_current + b * current_price
 
 def demand(p):
@@ -75,10 +75,10 @@ profits = profit(prices)
 
 optimal_price = prices[np.argmax(profits)]
 max_profit = np.max(profits)
-
 current_profit = profit(current_price)
 
-delta_percent = ((max_profit - current_profit) / current_profit) * 100
+delta_profit = max_profit - current_profit
+delta_percent = (delta_profit / current_profit) * 100
 
 # --------------------------
 # Display Metrics
@@ -90,7 +90,7 @@ col2.metric("Optimal Price", f"₹{int(optimal_price)}")
 col3.metric(
     "Max Profit",
     f"₹{int(max_profit):,}",
-    delta=f"{int(max_profit - current_profit):,} ({delta_percent:.1f}%)"
+    delta=f"{int(delta_profit):,} ({delta_percent:.1f}%)"
 )
 
 # --------------------------
@@ -98,9 +98,9 @@ col3.metric(
 # --------------------------
 fig, ax = plt.subplots()
 
-ax.plot(prices, profits, label="Prices")
+ax.plot(prices, profits, label="Profit Curve")
 ax.axvline(current_price, linestyle='--', label="Current Price")
-ax.axvline(optimal_price, linestyle='--', label="Optimal Price")
+ax.axvline(optimal_price, linestyle='--', linewidth=2, label="Optimal Price")
 
 ax.set_xlabel("Price")
 ax.set_ylabel("Profit")
@@ -114,10 +114,7 @@ st.pyplot(fig)
 # --------------------------
 st.markdown("## Decision Panel")
 
-delta_profit = max_profit - current_profit
-delta_percent = (delta_profit / current_profit) * 100
-
-# Sensitivity band (reuse your function if already defined)
+# Sensitivity analysis
 def optimal_for_b(b_val):
     a_temp = demand_at_current + b_val * current_price
     prices_temp = np.linspace(comp_min, comp_max, 200)
@@ -130,22 +127,27 @@ high_b = b * 1.3
 low_price = optimal_for_b(low_b)
 high_price = optimal_for_b(high_b)
 
+low_price, high_price = sorted([low_price, high_price])
+
 # Layout
 col1, col2 = st.columns([1, 1])
 
-# --- LEFT: Decision ---
+# --- LEFT: Recommendation ---
 with col1:
     st.markdown("### Recommendation")
 
-    if optimal_price > current_price:
-        st.success(f"Increase price → Target: ₹{int(optimal_price)}")
-    elif optimal_price < current_price:
-        st.warning(f"Decrease price → Target: ₹{int(optimal_price)}")
+    price_diff = optimal_price - current_price
+
+    if abs(price_diff) < 1:
+        st.info(f"Recommended Price: ₹{int(optimal_price)} (≈ current price)")
     else:
-        st.info("Current price is already optimal")
+        arrow = "↑" if price_diff > 0 else "↓"
+        st.success(
+            f"Recommended Price: ₹{int(optimal_price)} ({arrow} ₹{abs(int(price_diff))} from ₹{int(current_price)})"
+        )
 
     st.markdown("### Impact")
-    st.write(f"Profit Change: ₹{int(delta_profit):,} ({delta_percent:.1f}%)")
+    st.write(f"Expected Profit Increase: ₹{int(delta_profit):,} (+{delta_percent:.1f}%)")
 
 # --- RIGHT: Robustness ---
 with col2:
@@ -160,7 +162,6 @@ with col2:
         st.write("• Pricing is sensitive → better demand estimation helps")
 
     st.write("• Avoid frequent reactive price changes")
-
 
 # --------------------------
 # Explanation
